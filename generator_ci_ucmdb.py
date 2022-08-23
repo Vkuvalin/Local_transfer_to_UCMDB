@@ -8,10 +8,9 @@ from ip_address_formatting import ipFormatting
 
 ip_addresses = dict()
 def ipAddressesAddDict(list_ip_addresses, location):
-    
-    flag = True
-    
+
     for ip in list_ip_addresses:
+        flag = True
         ip_addresses[ip] = ip_addresses.get(ip, [0, ""])
         ip_addresses[ip][0] += 1
 
@@ -23,8 +22,6 @@ def ipAddressesAddDict(list_ip_addresses, location):
                     flag = False
             if flag:
                 ip_addresses[ip][1] = "{}, {}".format(ip_addresses[ip][1], location)
-                
-        flag = True
 
 
 
