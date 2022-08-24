@@ -8,15 +8,14 @@ from ip_address_formatting import ipFormatting
 
 ip_addresses = dict()
 def ipAddressesAddDict(list_ip_addresses, location):
-
     for ip in list_ip_addresses:
-        flag = True
         ip_addresses[ip] = ip_addresses.get(ip, [0, ""])
         ip_addresses[ip][0] += 1
 
         if ip_addresses[ip][1] == "":
             ip_addresses[ip][1] = location
         else:
+            flag = True
             for j in ip_addresses[ip][1].split(', '):
                 if j == location:
                     flag = False
