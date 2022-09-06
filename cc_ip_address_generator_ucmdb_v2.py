@@ -71,9 +71,7 @@ def DiscoveryMain(Framework):
 
     cred, _ = getCred(Framework, ucmdb_ip)
     username = Framework.getProtocolProperty(cred, CollectorsConstants.PROTOCOL_ATTRIBUTE_USERNAME, '')
-    # password = Framework.getProtocolProperty(cred, CollectorsConstants.PROTOCOL_ATTRIBUTE_PASSWORD, '')
-    password = 'adminPassw0rd-'
-
+    password = Framework.getProtocolProperty(cred, CollectorsConstants.PROTOCOL_ATTRIBUTE_PASSWORD, '')
 
     # Создание соединения
     provider = UcmdbServiceFactory.getServiceProvider("https", ucmdb_ip, ucmdb_port)
