@@ -45,7 +45,6 @@ def dictionaryFillingCiID(topology, ci_list, dict):
         ci_id_string = ci_id.getAsString()
         dict[ci_id_string] = topology.getCI(ci_id)
 
-
 def getCred(framework, ucmdb_ip):
     credentials = netutils.getAvailableProtocols(framework, ClientsConsts.SSH_PROTOCOL_NAME, ucmdb_ip)
     props = Properties()
@@ -57,6 +56,21 @@ def getCred(framework, ucmdb_ip):
             username = framework.getProtocolProperty(cred_id, CollectorsConstants.PROTOCOL_ATTRIBUTE_USERNAME, '')
             return cred_id, props
     return None
+
+def getSubnet(ip, mask):
+    convert_mask = 0
+
+    def number_of_set_bits(x):
+        n = 0
+        while x:
+            n += x & 1
+            x = x >> 1
+        return n
+
+    for num in mask.split('.'):
+        convert_mask += number_of_set_bits(int(num))
+
+    return "{}/{}".format(ip, convert_mask)
 
 
 def DiscoveryMain(Framework):
@@ -73,11 +87,11 @@ def DiscoveryMain(Framework):
     username = Framework.getProtocolProperty(cred, CollectorsConstants.PROTOCOL_ATTRIBUTE_USERNAME, '')
     password = Framework.getProtocolProperty(cred, CollectorsConstants.PROTOCOL_ATTRIBUTE_PASSWORD, '')
 
+
     # Создание соединения
     provider = UcmdbServiceFactory.getServiceProvider("https", ucmdb_ip, ucmdb_port)
     ucmdbService = provider.connect(provider.createCredentials(username, password),
                                     provider.createClientContext("ucmdb-internal"))
-
 
     # Работа с query
     queryService = ucmdbService.getTopologyQueryService()
@@ -124,6 +138,8 @@ def DiscoveryMain(Framework):
     for ip in ip_addresses:
         ip_name = ip.getPropertyValue("name")
         ip_global_id = ip.getPropertyValue("global_id")
+        ip_netaddr = ip.getPropertyValue("ip_netaddr")
+        ip_netmask = ip.getPropertyValue("ip_netmask")
 
         # Создание КЕ cc_ip_address
         hostOsh = ObjectStateHolder("cc_ip_address")
@@ -139,6 +155,11 @@ def DiscoveryMain(Framework):
 
         hostOsh.setStringAttribute("ca_primary_dns_name", dns_name)
         hostOsh.setStringAttribute("ca_domain", domain)
+
+        if ip_netaddr and ip_netmask:
+            hostOsh.setStringAttribute("ca_subnet", getSubnet(ip_netaddr, ip_netmask))
+        else:
+            hostOsh.setStringAttribute("ca_subnet", "{}/32".format(ip_name))
 
 
         try:
@@ -213,7 +234,6 @@ def DiscoveryMain(Framework):
                                     addressesList.append(ipservice_ipserver_address)
 
                         hostOsh.setStringAttribute("ca_ip_service_endpoint_network_port_info", '; '.join(addressesList))
-
                 except:
                     pass
         except:
