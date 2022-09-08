@@ -7,6 +7,7 @@ from ip_address_formatting import ipFormatting
 
 
 ip_addresses = dict()
+count_ci = 0
 def ipAddressesAddDict(list_ip_addresses, location):
     for ip in list_ip_addresses:
         ip_addresses[ip] = ip_addresses.get(ip, [0, ""])
@@ -80,8 +81,8 @@ def _createCCIpAddress(ip_ci, num, OSHVResult, description='NA', ca_global_id='N
 
     OSHVResult.add(hostOsh)
 
-
 def incomingDataProcessing(framework, ip_array, location, OSHVResult, **sort):
+    global count_ci
     for num in range(len(ip_array)):
         ip = ip_array[num]
         try:
@@ -104,6 +105,7 @@ def incomingDataProcessing(framework, ip_array, location, OSHVResult, **sort):
 
                 if result is None:
                     framework.reportWarning("From {}. Bad ip addresses - {}".format(location, ip_list))
+                count_ci += len(ip_list)
 
             else:
                 ip_formatted = ip.replace(' ', '')
@@ -115,10 +117,25 @@ def incomingDataProcessing(framework, ip_array, location, OSHVResult, **sort):
                 ipAddressesAddDict(result, location)
                 for clear_ip in result:
                     _createCCIpAddress(clear_ip, num, OSHVResult, **sort)
-
+                count_ci += len(result)
         except:
             framework.reportWarning("From {}. Bad ip address - {}".format(location, ip))
 
+        if count_ci >= 15000:
+            sendObjectsInUcmdb(framework, OSHVResult)
+
+
+def sendObjectsInUcmdb(Framework, OSHVResult):
+    for i in range(0, OSHVResult.size(), 15000):
+        limit = i + 15000
+        if limit >= OSHVResult.size():
+            limit = OSHVResult.size()
+
+        vector = OSHVResult.getSubVector(i, limit)
+        Framework.sendObjects(vector)
+        Framework.flushObjects()
+        vector.clear()
+    OSHVResult.clear()
 
 def DiscoveryMain(Framework):
     OSHVResult = ObjectStateHolderVector()
@@ -275,17 +292,7 @@ def DiscoveryMain(Framework):
                            ca_serial=vrm_serial, ca_sm_id=vrm_sm_id, ca_device_type=vrm_device_type,
                            ca_vendor=vrm_vendor, ca_location=vrm_location)
 
+    sendObjectsInUcmdb(Framework, OSHVResult)
     logger.debug('----------------------------Process completed----------------------------')
-
-    # Загрузка resultVector в ucmdb пачками
-    for i in range(0, OSHVResult.size(), 15000):
-        limit = i + 15000
-        if limit >= OSHVResult.size():
-            limit = OSHVResult.size()
-
-        vector = OSHVResult.getSubVector(i, limit)
-        Framework.sendObjects(vector)
-        Framework.flushObjects()
-        vector.clear()
 
     return None
