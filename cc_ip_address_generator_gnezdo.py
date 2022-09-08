@@ -18,7 +18,6 @@ def ipAddressesAddDict(list_ip_addresses, location):
             if location not in ip_addresses[ip][1]:
                 ip_addresses[ip][1] = "{}, {}".format(ip_addresses[ip][1], location)
 
-
 def parseListCcIpAddresses(framework):
     list_name_cc_ip_addresses = framework.getTriggerCIDataAsList('cc_ip_address_name')
     list_location_cc_ip_address = framework.getTriggerCIDataAsList('cc_ip_address_location')
@@ -27,15 +26,64 @@ def parseListCcIpAddresses(framework):
         if list_location_cc_ip_address[i] == "UCMDB":
             ipAddressesAddDict(list_name_cc_ip_addresses[i].split(), list_location_cc_ip_address[i])
 
-
 def _verificationParameter(parameterName, defaultValue=None):
     value = parameterName
     if value and value.lower() == 'na':
         value = defaultValue
     return value
 
+def getDomain(dns, defaultValue=None):
+    if not dns.replace('.', '').isdigit() and '.' in dns:
+        return dns[dns.find('.')+1:]
+    else:
+        return defaultValue
 
-def incomingDataProcessing(framework, ip_array, create_function, location):
+def _createCCIpAddress(ip_ci, num, OSHVResult, description='NA', ca_global_id='NA', ca_model='NA', ca_node_os_name='NA',
+             ca_name='NA', ca_serial='NA', ca_sm_id='NA', ca_node_os_vendor='NA', ca_primary_dns_name='NA',
+             ca_device_type='NA', ca_firmware='NA', ca_rack='NA', site='NA', ca_vendor='NA',
+             ca_bucket='NA', ca_config='NA', ca_datacenter='NA', ca_dcroom='NA',
+             ca_interface='NA', ca_location='NA', ca_ids='NA'):
+
+
+    hostOsh = ObjectStateHolder("cc_ip_address")
+    hostOsh.setStringAttribute("name", ip_ci)
+    if ip_addresses[ip_ci][0] > 1:
+        hostOsh.setAttribute("ca_multiple_entry", True)
+        hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip_ci][1])
+    else:
+        hostOsh.setStringAttribute("ca_primary_dns_name", None if ca_primary_dns_name == 'NA' else ca_primary_dns_name[num])
+        hostOsh.setStringAttribute("ca_node_os_vendor", None if ca_node_os_vendor == 'NA' else ca_node_os_vendor[num])
+        hostOsh.setStringAttribute("ca_device_type", ca_device_type)
+        hostOsh.setStringAttribute("ca_firmware", None if ca_firmware == 'NA' else ca_firmware[num])
+        hostOsh.setStringAttribute("ca_rack",None if ca_rack == 'NA' else ca_rack[num])
+        hostOsh.setStringAttribute("site", None if site == 'NA' else site[num])
+        hostOsh.setStringAttribute("ca_ids", None if ca_ids == 'NA' else ca_ids[num])
+        hostOsh.setStringAttribute("ca_name", None if ca_name == 'NA' else ca_name[num])
+        hostOsh.setStringAttribute("ca_vendor", None if ca_vendor == 'NA' else ca_vendor[num])
+        hostOsh.setStringAttribute("ca_bucket", None if ca_bucket == 'NA' else ca_bucket[num])
+        hostOsh.setStringAttribute("ca_config", None if ca_config == 'NA' else ca_config[num])
+        hostOsh.setStringAttribute("ca_dcroom", None if ca_dcroom == 'NA' else ca_dcroom[num])
+        hostOsh.setStringAttribute("ca_serial", None if ca_serial == 'NA' else ca_serial[num])
+        hostOsh.setStringAttribute("ca_model", None if ca_model == 'NA' else ca_model[num])
+        hostOsh.setStringAttribute("ca_sm_id", None if ca_sm_id == 'NA' else ca_sm_id[num])
+        hostOsh.setStringAttribute("ca_interface", None if ca_interface == 'NA' else ca_interface[num])
+        hostOsh.setStringAttribute("description", None if description == 'NA' else description[num])
+        hostOsh.setStringAttribute("ca_global_id", None if ca_global_id == 'NA' else ca_global_id[num])
+        hostOsh.setStringAttribute("ca_datacenter", None if ca_datacenter == 'NA' else ca_datacenter[num])
+        hostOsh.setStringAttribute("ca_node_os_name", None if ca_node_os_name == 'NA' else ca_node_os_name[num])
+
+        if None if ca_primary_dns_name == 'NA' else ca_primary_dns_name[num]:
+            domain = getDomain(_verificationParameter(ca_primary_dns_name[num]))
+            hostOsh.setStringAttribute("ca_domain", domain)
+        if None if ca_sm_id == 'NA' else ca_sm_id[num]:
+            hostOsh.setAttribute("ca_identification", True)
+
+        hostOsh.setStringAttribute("ca_location", ca_location)
+
+    OSHVResult.add(hostOsh)
+
+
+def incomingDataProcessing(framework, ip_array, location, OSHVResult, **sort):
     for num in range(len(ip_array)):
         ip = ip_array[num]
         try:
@@ -45,7 +93,6 @@ def incomingDataProcessing(framework, ip_array, create_function, location):
 
                 for i in range(len(ip_list)):
                     ip_list[i] = ip_list[i].replace(' ', '')
-
             result = None
             if ip_list:
                 for ip in ip_list:
@@ -53,28 +100,26 @@ def incomingDataProcessing(framework, ip_array, create_function, location):
                     result = ipFormatting(ip)
                     if result is None:
                         continue
-
                     ipAddressesAddDict(result, location)
                     for clear_ip in result:
-                        create_function(clear_ip, num)
+                        _createCCIpAddress(clear_ip, num, OSHVResult, **sort)
 
                 if result is None:
-                    framework.reportWarning("Bad ip addresses - {}".format(ip_list))
+                    framework.reportWarning("From {}. Bad ip addresses - {}".format(location, ip_list))
 
             else:
                 ip_formatted = ip.replace(' ', '')
                 result = ipFormatting(ip_formatted)
-
                 if result is None:
-                    framework.reportWarning("Bad ip address - {}".format(ip_formatted))
+                    framework.reportWarning("From {}. Bad ip address - {}".format(location, ip_formatted))
                     continue
 
                 ipAddressesAddDict(result, location)
                 for clear_ip in result:
-                    create_function(clear_ip, num)
+                    _createCCIpAddress(clear_ip, num, OSHVResult, **sort)
 
         except:
-            framework.reportWarning("Bad ip address - {}.".format(ip))
+            framework.reportWarning("From {}. Bad ip address - {}".format(location, ip))
 
 
 def DiscoveryMain(Framework):
@@ -95,33 +140,15 @@ def DiscoveryMain(Framework):
     host_os_sm_id = Framework.getTriggerCIDataAsList('host_os_sm_id')
     host_os_vendor = Framework.getTriggerCIDataAsList('host_os_vendor')
     host_os_dns_name = Framework.getTriggerCIDataAsList('host_os_dns_name')
-
+    host_device_type = 'Хост ОС'
     host_os_location = "GNEZDO_HOST_OS"
 
-    def _createCCIpAddressHostOs(ip, num):
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
-
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("description", _verificationParameter(host_os_description[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(host_os_global_id[num]))
-            hostOsh.setStringAttribute("ca_model", _verificationParameter(host_os_model[num]))
-            hostOsh.setStringAttribute("ca_node_os_name", _verificationParameter(host_os_os_name[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(host_os_name[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(host_os_serial[num]))
-            hostOsh.setStringAttribute("ca_sm_id", _verificationParameter(host_os_sm_id[num]))
-            hostOsh.setStringAttribute("ca_node_os_vendor", _verificationParameter(host_os_vendor[num]))
-            hostOsh.setStringAttribute("ca_primary_dns_name", _verificationParameter(host_os_dns_name[num]))
-
-            if _verificationParameter(host_os_model[num]) and _verificationParameter(host_os_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", host_os_location)
-
-        OSHVResult.add(hostOsh)
+    incomingDataProcessing(Framework, host_os_ip, host_os_location, OSHVResult, description=host_os_description,
+                           ca_global_id=host_os_global_id, ca_model=host_os_model, ca_node_os_name=host_os_os_name,
+                           ca_sm_id=host_os_sm_id, ca_node_os_vendor=host_os_vendor,
+                           ca_primary_dns_name=host_os_dns_name,
+                           ca_location=host_os_location, ca_name=host_os_name, ca_serial=host_os_serial,
+                           ca_device_type=host_device_type)
 
 
     # SAN
@@ -139,37 +166,13 @@ def DiscoveryMain(Framework):
     san_vendor = Framework.getTriggerCIDataAsList('san_vendor')
     san_bucket = Framework.getTriggerCIDataAsList('san_bucket')
     san_config = Framework.getTriggerCIDataAsList('san_config')
-
+    san_device_type = 'Коммутатор SAN'
     san_location = "GNEZDO_SAN"
 
-    def _createCCIpAddressSan(ip, num):
-
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
-
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("description", _verificationParameter(san_description[num]))
-            hostOsh.setStringAttribute("ca_firmware", _verificationParameter(san_firmware[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(san_global_id[num]))
-            hostOsh.setStringAttribute("ca_model", _verificationParameter(san_model[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(san_name[num]))
-            hostOsh.setStringAttribute("ca_rack", _verificationParameter(san_rack[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(san_serial[num]))
-            hostOsh.setStringAttribute("site", _verificationParameter(san_site[num]))
-            hostOsh.setStringAttribute("ca_sm_id", _verificationParameter(san_sm_id[num]))
-            hostOsh.setStringAttribute("ca_vendor", _verificationParameter(san_vendor[num]))
-            hostOsh.setStringAttribute("ca_bucket", _verificationParameter(san_bucket[num]))
-            hostOsh.setStringAttribute("ca_config", _verificationParameter(san_config[num]))
-
-            if _verificationParameter(san_model[num]) and _verificationParameter(san_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", san_location)
-
-        OSHVResult.add(hostOsh)
+    incomingDataProcessing(Framework, san_ip, san_location, OSHVResult, ca_location=san_location,
+                           description=san_description, ca_global_id=san_global_id, ca_model=san_model, ca_name=san_name,
+                           ca_rack=san_rack, ca_serial=san_serial, ca_sm_id=san_sm_id, ca_device_type=san_device_type,
+                           ca_firmware=san_firmware, site=san_site, ca_vendor=san_vendor, ca_bucket=san_bucket, ca_config=san_config)
 
 
     # SERVER
@@ -187,37 +190,16 @@ def DiscoveryMain(Framework):
     server_rack = Framework.getTriggerCIDataAsList('server_rack')
     server_serial = Framework.getTriggerCIDataAsList('server_serial')
     server_vendor = Framework.getTriggerCIDataAsList('server_vendor')
-
+    server_sm_id = Framework.getTriggerCIDataAsList('server_cmdbid')
+    server_device_type = 'Физический сервер'
     server_location = "GNEZDO_SERVER"
 
-    def _createCCIpAddressServer(ip, num):
-
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
-
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("ca_datacenter", _verificationParameter(server_datacenter[num]))
-            hostOsh.setStringAttribute("ca_dcroom", _verificationParameter(server_dcroom[num]))
-            hostOsh.setStringAttribute("description", _verificationParameter(server_description[num]))
-            hostOsh.setStringAttribute("ca_primary_dns_name", _verificationParameter(server_dns_name[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(server_global_id[num]))
-            hostOsh.setStringAttribute("ca_ids", _verificationParameter(server_ids[num]))
-            hostOsh.setStringAttribute("ca_interface", _verificationParameter(server_interface[num]))
-            hostOsh.setStringAttribute("ca_model", _verificationParameter(server_model[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(server_name[num]))
-            hostOsh.setStringAttribute("ca_rack", _verificationParameter(server_rack[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(server_serial[num]))
-            hostOsh.setStringAttribute("ca_vendor", _verificationParameter(server_vendor[num]))
-
-            if _verificationParameter(server_model[num]) and _verificationParameter(server_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", server_location)
-
-        OSHVResult.add(hostOsh)
+    incomingDataProcessing(Framework, server_ip, server_location, OSHVResult, ca_datacenter=server_datacenter,
+                           ca_dcroom=server_dcroom, description=server_description, ca_primary_dns_name=server_dns_name,
+                           ca_global_id=server_global_id, ca_ids=server_ids, ca_interface=server_interface,
+                           ca_model=server_model, ca_name=server_name, ca_rack=server_rack, ca_serial=server_serial,
+                           ca_node_os_vendor=server_vendor, ca_sm_id=server_sm_id, ca_device_type=server_device_type,
+                           ca_location=server_location)
 
 
     # SHD
@@ -233,34 +215,17 @@ def DiscoveryMain(Framework):
     shd_site = Framework.getTriggerCIDataAsList('shd_site')
     shd_sm_id = Framework.getTriggerCIDataAsList('shd_sm_id')
     shd_vendor = Framework.getTriggerCIDataAsList('shd_vendor')
+    shd_device_type = 'СХД'
+
 
     shd_location = "GNEZDO_SHD"
 
-    def _createCCIpAddressShd(ip, num):
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
-
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("description", _verificationParameter(shd_description[num]))
-            hostOsh.setStringAttribute("ca_firmware", _verificationParameter(shd_firmware[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(shd_global_id[num]))
-            hostOsh.setStringAttribute("ca_model", _verificationParameter(shd_model[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(shd_name[num]))
-            hostOsh.setStringAttribute("ca_rack", _verificationParameter(shd_rack[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(shd_serial[num]))
-            hostOsh.setStringAttribute("site", _verificationParameter(shd_site[num]))
-            hostOsh.setStringAttribute("ca_sm_id", _verificationParameter(shd_sm_id[num]))
-            hostOsh.setStringAttribute("ca_vendor", _verificationParameter(shd_vendor[num]))
-
-            if _verificationParameter(shd_model[num]) and _verificationParameter(shd_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", shd_location)
-
-        OSHVResult.add(hostOsh)
+    incomingDataProcessing(Framework, shd_ip, shd_location, OSHVResult, ca_datacenter=server_datacenter,
+                           ca_dcroom=server_dcroom, description=shd_description, ca_primary_dns_name=server_dns_name,
+                           ca_global_id=shd_global_id, ca_ids=server_ids, ca_interface=server_interface,
+                           ca_model=shd_model, ca_name=shd_name, ca_rack=shd_rack, ca_serial=shd_serial,
+                           ca_node_os_vendor=server_vendor, ca_sm_id=shd_sm_id, ca_device_type=shd_device_type,
+                           ca_firmware=shd_firmware, site=shd_site, ca_vendor=shd_vendor, ca_location=shd_location)
 
 
     # SRK
@@ -277,36 +242,19 @@ def DiscoveryMain(Framework):
     srk_serial = Framework.getTriggerCIDataAsList('srk_serial')
     srk_site = Framework.getTriggerCIDataAsList('srk_site')
     srk_vendor = Framework.getTriggerCIDataAsList('srk_vendor')
+    srk_sm_id = Framework.getTriggerCIDataAsList('srk_sm_id')
+    srk_device_type = 'СРК'
+
 
     srk_location = "GNEZDO_SRK"
 
-    def _createCCIpAddressSrk(ip, num):
-
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
-
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("ca_config", _verificationParameter(srk_config[num]))
-            hostOsh.setStringAttribute("description", _verificationParameter(srk_description[num]))
-            hostOsh.setStringAttribute("ca_primary_dns_name", _verificationParameter(srk_dns_name[num]))
-            hostOsh.setStringAttribute("ca_firmware", _verificationParameter(srk_firmware[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(srk_global_id[num]))
-            hostOsh.setStringAttribute("ca_model", _verificationParameter(srk_model[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(srk_name[num]))
-            hostOsh.setStringAttribute("ca_rack", _verificationParameter(srk_rack[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(srk_serial[num]))
-            hostOsh.setStringAttribute("site", _verificationParameter(srk_site[num]))
-            hostOsh.setStringAttribute("ca_vendor", _verificationParameter(srk_vendor[num]))
-
-            if _verificationParameter(srk_model[num]) and _verificationParameter(srk_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", srk_location)
-
-        OSHVResult.add(hostOsh)
+    incomingDataProcessing(Framework, srk_ip, srk_location, OSHVResult,
+                           description=srk_description, ca_primary_dns_name=srk_dns_name, ca_global_id=srk_global_id,
+                           ca_model=srk_model, ca_name=srk_name, ca_rack=srk_rack, ca_serial=srk_serial,
+                           ca_sm_id=srk_sm_id,
+                           ca_device_type=srk_device_type, ca_firmware=srk_firmware, site=srk_site,
+                           ca_vendor=srk_vendor,
+                           ca_location=srk_location, ca_config=srk_config)
 
 
     # VRM
@@ -318,44 +266,24 @@ def DiscoveryMain(Framework):
     vrm_os_name = Framework.getTriggerCIDataAsList('vrm_os_name')
     vrm_serial = Framework.getTriggerCIDataAsList('vrm_serial')
     vrm_vendor = Framework.getTriggerCIDataAsList('vrm_vendor')
+    vrm_sm_id = Framework.getTriggerCIDataAsList('vrm_sm_id')
+    vrm_device_type = 'ВРМ'
+
 
     vrm_location = "GNEZDO_VRM"
 
-    def _createCCIpAddressVrm(ip, num):
+    incomingDataProcessing(Framework, vrm_ip, vrm_location, OSHVResult, ca_node_os_name=vrm_os_name,
+                           description=vrm_description, ca_global_id=vrm_global_id, ca_name=vrm_name,
+                           ca_serial=vrm_serial, ca_sm_id=vrm_sm_id, ca_device_type=vrm_device_type,
+                           ca_vendor=vrm_vendor, ca_location=vrm_location)
 
-        hostOsh = ObjectStateHolder("cc_ip_address")
-        hostOsh.setStringAttribute("name", ip)
+    logger.debug('----------------------------Process completed----------------------------')
 
-        if ip_addresses[ip][0] > 1:
-            hostOsh.setAttribute("ca_multiple_entry", True)
-            hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip][1])
-        else:
-            hostOsh.setStringAttribute("description", _verificationParameter(vrm_description[num]))
-            hostOsh.setStringAttribute("ca_global_id", _verificationParameter(vrm_global_id[num]))
-            hostOsh.setStringAttribute("ca_name", _verificationParameter(vrm_name[num]))
-            hostOsh.setStringAttribute("ca_node_os_name", _verificationParameter(vrm_os_name[num]))
-            hostOsh.setStringAttribute("ca_serial", _verificationParameter(vrm_serial[num]))
-            hostOsh.setStringAttribute("ca_vendor", _verificationParameter(vrm_vendor[num]))
-
-            # Или тогда как?
-            if _verificationParameter(vrm_os_name[num]) and _verificationParameter(vrm_vendor[num]):
-                hostOsh.setAttribute("ca_identification", True)
-
-            hostOsh.setStringAttribute("ca_location", vrm_location)
-
-        OSHVResult.add(hostOsh)
-
-
-    incomingDataProcessing(Framework, host_os_ip, _createCCIpAddressHostOs, host_os_location)
-    incomingDataProcessing(Framework, san_ip, _createCCIpAddressSan, san_location)
-    incomingDataProcessing(Framework, server_ip, _createCCIpAddressServer, server_location)
-    incomingDataProcessing(Framework, shd_ip, _createCCIpAddressShd, shd_location)
-    incomingDataProcessing(Framework, srk_ip, _createCCIpAddressSrk, srk_location)
-    incomingDataProcessing(Framework, vrm_ip, _createCCIpAddressVrm, vrm_location)
-    logger.debug('Process completed')
-
+    # Загрузка resultVector в ucmdb пачками
     for i in range(0, OSHVResult.size(), 15000):
-        limit = (i + 15000) if limit >= OSHVResult.size() else OSHVResult.size()
+        limit = i + 15000
+        if limit >= OSHVResult.size():
+            limit = OSHVResult.size()
 
         vector = OSHVResult.getSubVector(i, limit)
         Framework.sendObjects(vector)
