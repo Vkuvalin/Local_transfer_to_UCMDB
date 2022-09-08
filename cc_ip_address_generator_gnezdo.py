@@ -26,11 +26,8 @@ def parseListCcIpAddresses(framework):
         if list_location_cc_ip_address[i] == "UCMDB":
             ipAddressesAddDict(list_name_cc_ip_addresses[i].split(), list_location_cc_ip_address[i])
 
-def _verificationParameter(parameterName, defaultValue=None):
-    value = parameterName
-    if value and value.lower() == 'na':
-        value = defaultValue
-    return value
+def getParametr(parameterName, num):
+    return None if parameterName == 'NA' else parameterName[num]
 
 def getDomain(dns, defaultValue=None):
     if not dns.replace('.', '').isdigit() and '.' in dns:
@@ -55,7 +52,7 @@ def _createCCIpAddress(ip_ci, num, OSHVResult, description='NA', ca_global_id='N
         hostOsh.setStringAttribute("ca_node_os_vendor", None if ca_node_os_vendor == 'NA' else ca_node_os_vendor[num])
         hostOsh.setStringAttribute("ca_device_type", ca_device_type)
         hostOsh.setStringAttribute("ca_firmware", None if ca_firmware == 'NA' else ca_firmware[num])
-        hostOsh.setStringAttribute("ca_rack",None if ca_rack == 'NA' else ca_rack[num])
+        hostOsh.setStringAttribute("ca_rack", None if ca_rack == 'NA' else ca_rack[num])
         hostOsh.setStringAttribute("site", None if site == 'NA' else site[num])
         hostOsh.setStringAttribute("ca_ids", None if ca_ids == 'NA' else ca_ids[num])
         hostOsh.setStringAttribute("ca_name", None if ca_name == 'NA' else ca_name[num])
@@ -72,10 +69,11 @@ def _createCCIpAddress(ip_ci, num, OSHVResult, description='NA', ca_global_id='N
         hostOsh.setStringAttribute("ca_datacenter", None if ca_datacenter == 'NA' else ca_datacenter[num])
         hostOsh.setStringAttribute("ca_node_os_name", None if ca_node_os_name == 'NA' else ca_node_os_name[num])
 
-        if None if ca_primary_dns_name == 'NA' else ca_primary_dns_name[num]:
-            domain = getDomain(_verificationParameter(ca_primary_dns_name[num]))
+        if getParametr(ca_primary_dns_name, num):
+            domain = getDomain(getParametr(ca_primary_dns_name, num))
             hostOsh.setStringAttribute("ca_domain", domain)
-        if None if ca_sm_id == 'NA' else ca_sm_id[num]:
+        # if None if ca_sm_id == 'NA' else ca_sm_id[num]:
+        if getParametr(ca_sm_id, num):
             hostOsh.setAttribute("ca_identification", True)
 
         hostOsh.setStringAttribute("ca_location", ca_location)
