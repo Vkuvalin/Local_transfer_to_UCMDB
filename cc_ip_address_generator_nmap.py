@@ -68,6 +68,11 @@ SOFTWARE_NAMES_DICT = {
     "microsoft exchange server": "Microsoft Exchange Server"}
 
 
+def getDomain(dns, defaultValue=None):
+    if not dns.replace('.', '').isdigit() and '.' in dns:
+        return dns[dns.find('.')+1:]
+    else:
+        return defaultValue
 
 
 def syncNmapPortConfigFile(agentPath):
@@ -222,7 +227,12 @@ def processNmapResult(fileName, OSHVResult, discoverOsName, doServiceFingerprint
                 hostOshMy = ObjectStateHolder("cc_ip_address")
                 hostOshMy.setStringAttribute("name", ip)
 
-            hostname = None if hostname == ip or hostname is None else hostname
+            hostname = None if hostname == ip else hostname
+
+            if hostname:
+                domain = getDomain(hostname)
+                hostOshMy.setStringAttribute("ca_domain", domain)
+
             hostOshMy.setStringAttribute("ca_primary_dns_name", hostname)
             try:
                 hostOshMy.setStringAttribute("ca_node_role", str(hostOsh.getAttribute('node_role').getValue()))
@@ -250,10 +260,6 @@ def processNmapResult(fileName, OSHVResult, discoverOsName, doServiceFingerprint
                         serviceName = serviceNode.getAttributeValue("name")
                         portsAndServiceNameList.append("{}:{} ({})".format(str(ip),str(portNumber),serviceName))
             hostOshMy.setStringAttribute("ca_ip_service_endpoint_network_port_info", '; '.join(portsAndServiceNameList))
-
-            if osVendor and hostClass and hostClass != "host":
-                hostOshMy.setAttribute("ca_identification", True)
-
             hostOshMy.setStringAttribute("ca_location", location)
 
             OSHVResult.add(hostOshMy)
@@ -282,10 +288,22 @@ def separateCaption(hostOSH, caption):
     modeling.setHostOsName(hostOSH, caption)
 
 
+def sendObjectsIntoUcmdb(Framework, OSHVResult):
+    for i in range(0, OSHVResult.size(), 15000):
+        limit = i + 15000
+        if limit >= OSHVResult.size():
+            limit = OSHVResult.size()
+
+        vector = OSHVResult.getSubVector(i, limit)
+        Framework.sendObjects(vector)
+        Framework.flushObjects()
+        vector.clear()
+
+
 def DiscoveryMain(Framework):
     OSHVResult = ObjectStateHolderVector()
-    logger.debug('Start nmap_osfingerprint.py')
-    ip = Framework.getDestinationAttribute('ip_address')
+
+    ip = Framework.getTriggerCIDataAsList('ip_address')
     timeout = Framework.getParameter('nmap_host_timeout')
     if not str(timeout).isdigit():
         msg = "Timeout parameter value must be a digit"
@@ -293,7 +311,7 @@ def DiscoveryMain(Framework):
         errormessages.resolveAndReport(msg, ClientsConsts.LOCAL_SHELL_PROTOCOL_NAME, Framework)
         return OSHVResult
 
-    timeout = int(timeout) * 1000
+    timeout = int(timeout) * 100
     scanKnownPortsOnly = Boolean.parseBoolean(Framework.getParameter('scan_known_ports_only'))
     portstoscan = Framework.getParameter('scan_these_ports_only')
     doServiceFingerprints = Boolean.parseBoolean(Framework.getParameter('Perform_Port_Fingerprints'))
@@ -305,27 +323,29 @@ def DiscoveryMain(Framework):
     discoverUdpPorts = 0
     agent_root_dir = CollectorsParameters.BASE_PROBE_MGR_DIR
     agent_ext_dir = agent_root_dir + CollectorsParameters.getDiscoveryResourceFolder() + CollectorsParameters.FILE_SEPARATOR
-
-    tmp_file_name = agent_ext_dir + string.replace(ip, '.', '_') + time.strftime("%H%M%S",time.gmtime(time.time())) + 'nmap.xml'
-
     syncNmapPortConfigFile(agent_root_dir)
 
-    logger.debug('temp file for storing nmap results: ', tmp_file_name)
+
     try:
         client = Framework.createClient(ClientsConsts.LOCAL_SHELL_PROTOCOL_NAME)
-        try:
-            performNmapDiscover(client, ip, tmp_file_name, timeout, agent_ext_dir, scanKnownPortsOnly, portstoscan,
-                                doServiceFingerprints, discoverUdpPorts, nmapLocation)
+        count = 0
+        for i in ip:
+            count += 1
+            if count > 100:
+                break
+            try:
+                tmp_file_name = agent_ext_dir + string.replace(i, '.', '_') + time.strftime("%H%M%S", time.gmtime(
+                    time.time())) + 'nmap.xml'
+                logger.debug('temp file for storing nmap results: ', tmp_file_name)
+                performNmapDiscover(client, i, tmp_file_name, timeout, agent_ext_dir, scanKnownPortsOnly, portstoscan,
+                                    doServiceFingerprints, discoverUdpPorts, nmapLocation)
 
-            if os.path.exists(tmp_file_name):
-                logger.debug('start processing the nmap results')
-                processNmapResult(tmp_file_name, OSHVResult, discoverOsName, doServiceFingerprints, createApp,
-                                  Framework)
-            else:
-                raise ValueError, 'Error nmap result file is missing: %s' % tmp_file_name
-        finally:
-            client.close()
-            File(tmp_file_name).delete()
+                if os.path.exists(tmp_file_name):
+                    processNmapResult(tmp_file_name, OSHVResult, discoverOsName, doServiceFingerprints, createApp, Framework)
+                else:
+                    raise ValueError, 'Error nmap result file is missing: %s' % tmp_file_name
+            finally:
+                File(tmp_file_name).delete()
     except Exception, e:
         msg = str(e.getMessage())
         logger.debug(msg)
@@ -338,4 +358,6 @@ def DiscoveryMain(Framework):
         logger.debug(msg)
         errormessages.resolveAndReport(msg, ClientsConsts.LOCAL_SHELL_PROTOCOL_NAME, Framework)
 
+    sendObjectsIntoUcmdb(Framework, OSHVResult)
+    client.close()
     return OSHVResult
