@@ -49,7 +49,6 @@ def _createCCIpAddress(ip_ci, num, OSHVResult, description='NA', ca_global_id='N
         hostOsh.setAttribute("ca_multiple_entry", True)
         hostOsh.setStringAttribute("ca_multiple_entry_location", ip_addresses[ip_ci][1])
     else:
-        hostOsh.setStringAttribute("ca_primary_dns_name", None if ca_primary_dns_name == 'NA' else ca_primary_dns_name[num])
         hostOsh.setStringAttribute("ca_primary_dns_name", getParametr(ca_primary_dns_name, num))
         hostOsh.setStringAttribute("ca_node_os_vendor", getParametr(ca_node_os_vendor, num))
         hostOsh.setStringAttribute("ca_device_type", ca_device_type)
